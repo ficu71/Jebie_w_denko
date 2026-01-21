@@ -8,3 +8,7 @@ scapy>=2.4.5
 netifaces>=0.11.0
 mysql-connector-python>=8.0.0
 smbprotocol>=1.6.0
+python-nmap>=0.6.1
+Pillow>=8.0.0
+scikit-learn>=1.0.0; python_version < '3.14'
+scipy>=1.7.0; python_version < '3.14'
