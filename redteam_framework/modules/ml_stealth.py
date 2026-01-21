@@ -44,7 +44,7 @@ class BehavioralAnalyzer:
         self.anomaly_detector = IsolationForest(contamination=0.1, random_state=42)
         self.scaler = StandardScaler()
         self.is_trained = False
-        self.baseline Established = False
+        self.baseline_established = False
 
     def collect_traffic_data(self, traffic_data: Dict) -> None:
         """
@@ -53,14 +53,14 @@ class BehavioralAnalyzer:
         Args:
             traffic_data (Dict): Traffic data with features like packet_size, interval, etc.
         """
-        if not self.baseline Established:
+        if not self.baseline_established:
             self.normal_traffic.append(traffic_data)
             logger.debug(f"Collected traffic data: {traffic_data}")
             
             # Check if we have enough data to establish baseline
             if len(self.normal_traffic) >= self.window_size:
                 self._establish_baseline()
-                self.baseline Established = True
+                self.baseline_established = True
                 logger.info("Baseline established for anomaly detection")
 
     def _establish_baseline(self) -> None:
