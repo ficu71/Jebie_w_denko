@@ -169,7 +169,7 @@ class C2Server:
             cursor.execute("""
                 INSERT INTO devices (ip_address, first_seen, last_seen, system_info)
                 VALUES (?, ?, ?, ?)
-            """, (ip_address, timestamp, timestamp, json.dumps(device_info.get('system_info', {})))
+            """, (ip_address, timestamp, timestamp, json.dumps(device_info.get('system_info', {}))))
         
         self.db_connection.commit()
 
