@@ -17,8 +17,13 @@ import statistics
 from typing import Dict, List, Optional, Tuple, Any
 from collections import defaultdict, deque
 import numpy as np
-from sklearn.ensemble import IsolationForest
-from sklearn.preprocessing import StandardScaler
+try:
+    from sklearn.ensemble import IsolationForest
+    from sklearn.preprocessing import StandardScaler
+    SKLEARN_AVAILABLE = True
+except ImportError:
+    SKLEARN_AVAILABLE = False
+    logging.getLogger('MLAdaptation').warning("scikit-learn not installed. ML features disabled.")
 
 # Configure logging
 logging.basicConfig(
@@ -40,9 +45,16 @@ class BehavioralAnalyzer:
             window_size (int): Size of the sliding window for anomaly detection.
         """
         self.window_size = window_size
+        self.window_size = window_size
         self.normal_traffic = deque(maxlen=window_size)
-        self.anomaly_detector = IsolationForest(contamination=0.1, random_state=42)
-        self.scaler = StandardScaler()
+        
+        if SKLEARN_AVAILABLE:
+            self.anomaly_detector = IsolationForest(contamination=0.1, random_state=42)
+            self.scaler = StandardScaler()
+        else:
+            self.anomaly_detector = None
+            self.scaler = None
+            
         self.is_trained = False
         self.baseline_established = False
 
@@ -65,6 +77,10 @@ class BehavioralAnalyzer:
 
     def _establish_baseline(self) -> None:
         """Establish the normal behavior baseline using collected data."""
+        if not SKLEARN_AVAILABLE or not self.anomaly_detector:
+            logger.warning("ML features disabled (scikit-learn not available)")
+            return
+
         try:
             # Convert deque to numpy array for ML processing
             traffic_array = np.array(list(self.normal_traffic))
@@ -94,6 +110,9 @@ class BehavioralAnalyzer:
             logger.warning("Anomaly detector not trained yet")
             return False
             
+        if not SKLEARN_AVAILABLE or not self.anomaly_detector:
+            return False
+
         try:
             # Scale the current traffic data
             current_array = np.array([list(current_traffic.values())])
